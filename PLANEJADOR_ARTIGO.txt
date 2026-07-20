@@ -1,0 +1,574 @@
+# Resolvendo Problemas Complexos com Google OR-Tools e CP-SAT
+## Um guia didático — do conceito à ferramenta com interface gráfica
+
+**Estudo de caso:** Auditoria Regulatória de Matrizes Curriculares (validação de
+carga horária segundo as regras do MEC e as DCNs)
+
+> **Nota:** a base de dados usada neste artigo é FICTÍCIA, criada apenas para
+> demonstrar a técnica. Os cursos e cargas horárias não correspondem a nenhuma
+> instituição real.
+
+---
+
+## PARTE 1 — A IDEIA CENTRAL (que serve para qualquer problema)
+
+### 1.1. O tipo de problema que estamos resolvendo
+
+Pare e pense em quantos problemas do seu dia a dia têm este formato:
+
+- "Preciso montar a **escala de plantão** respeitando folgas, férias e o limite
+  de horas de cada pessoa."
+- "Preciso distribuir o **orçamento** entre projetos sem estourar o teto de cada
+  área."
+- "Preciso montar a **grade de horários** sem que dois professores caiam na
+  mesma sala ao mesmo tempo."
+- "Preciso verificar se as **matrizes curriculares** da minha instituição cumprem
+  todas as regras do MEC."
+
+Todos eles têm a mesma anatomia: existem **decisões numéricas** a tomar (ou
+valores a conferir), existem **regras que não podem ser violadas** e,
+opcionalmente, existe **algo que queremos maximizar ou minimizar**.
+
+Esse tipo de problema tem nome: **Programação por Restrições** (Constraint
+Programming). E a boa notícia é que você não precisa inventar o algoritmo que o
+resolve — o Google já fez isso e distribui de graça.
+
+### 1.2. O que é o OR-Tools e o CP-SAT
+
+O **OR-Tools** é a biblioteca de otimização de código aberto do Google — a mesma
+família de tecnologia usada em problemas de roteirização, alocação e agendamento
+em escala industrial. Dentro dela, o **CP-SAT** é o motor (o *solver*) para
+problemas de restrições com **números inteiros**.
+
+O contrato é simples e vale para qualquer problema:
+
+```
+VOCÊ entrega:                          O CP-SAT devolve:
+  1. Variáveis (o que decidir)          → uma solução que respeita TODAS as
+  2. Restrições (as regras)               regras — ou a prova matemática de
+  3. Objetivo (opcional: o que            que essa solução NÃO EXISTE
+     maximizar/minimizar)
+```
+
+Perceba o detalhe poderoso: quando o solver responde `INFEASIBLE` (inviável),
+ele não está dizendo "não encontrei" — está **provando que é impossível**
+satisfazer todas as regras ao mesmo tempo. É exatamente essa propriedade que
+transforma o CP-SAT numa ferramenta de **auditoria**: se o conjunto de regras +
+dados é inviável, os dados violam alguma regra. Ponto.
+
+### 1.3. A receita universal em 5 passos
+
+Grave esta sequência — ela é o esqueleto de QUALQUER aplicação:
+
+```
+PASSO 1  Descrever o problema em português, com precisão
+PASSO 2  Traduzir as decisões em VARIÁVEIS inteiras (com mínimo e máximo)
+PASSO 3  Traduzir as regras em RESTRIÇÕES matemáticas
+PASSO 4  (Opcional) Definir a FUNÇÃO OBJETIVO — o que otimizar
+PASSO 5  Rodar o SOLVER e interpretar o status
+```
+
+O passo mais difícil não é programar — é o Passo 1. Se você consegue escrever a
+regra numa frase sem ambiguidade ("a extensão deve ser no mínimo 10% da carga
+total"), a tradução para código é quase mecânica.
+
+### 1.4. Um exemplo mínimo completo (15 linhas)
+
+Antes do caso real, veja a receita inteira funcionando num problema clássico:
+uma marcenaria produz mesas e cadeiras. Cada mesa consome 4 tábuas e 3 horas;
+cada cadeira, 2 tábuas e 2 horas. Há 60 tábuas e 40 horas disponíveis. Mesa dá
+R$ 70 de lucro, cadeira R$ 40. **Quantas produzir para maximizar o lucro?**
+
+```python
+from ortools.sat.python import cp_model
+
+model = cp_model.CpModel()
+
+# PASSO 2 — variáveis: quantidades a produzir (de 0 a 100 unidades)
+mesas    = model.NewIntVar(0, 100, 'mesas')
+cadeiras = model.NewIntVar(0, 100, 'cadeiras')
+
+# PASSO 3 — restrições: recursos limitados
+model.Add(4 * mesas + 2 * cadeiras <= 60)   # tábuas
+model.Add(3 * mesas + 2 * cadeiras <= 40)   # horas
+
+# PASSO 4 — objetivo: maximizar o lucro
+model.Maximize(70 * mesas + 40 * cadeiras)
+
+# PASSO 5 — resolver e ler o resultado
+solver = cp_model.CpSolver()
+status = solver.Solve(model)
+if status == cp_model.OPTIMAL:
+    print(f"Mesas: {solver.Value(mesas)} | Cadeiras: {solver.Value(cadeiras)}")
+    print(f"Lucro máximo: R$ {solver.ObjectiveValue():.0f}")
+```
+
+Só isso. Troque "mesas e cadeiras" por "turmas e docentes", "tábuas e horas"
+por "salas e orçamento", e você tem outro problema resolvido com o MESMO
+esqueleto. É essa transferibilidade que queremos que você leve deste artigo.
+
+### 1.5. Os conceitos que você precisa dominar
+
+**Variável de decisão** — um número que o solver pode escolher (ou conferir),
+sempre com limites: `model.NewIntVar(minimo, maximo, 'nome')`.
+
+**Domínio** — o intervalo permitido da variável. Um truque importante: se você
+criar a variável com mínimo = máximo (`NewIntVar(40, 40, ...)`), ela vira uma
+**constante travada**. Parece inútil? É o segredo do modo auditoria, como
+veremos adiante.
+
+**Restrição** — uma equação ou inequação que DEVE ser verdadeira:
+`model.Add(soma_ead <= teto)`. Restrições são inegociáveis; se uma não puder
+ser cumprida, o problema todo é inviável.
+
+**Função objetivo** — `model.Minimize(...)` ou `model.Maximize(...)`. É
+opcional: sem ela, o solver apenas procura QUALQUER solução válida (problema de
+viabilidade); com ela, procura a MELHOR solução válida (problema de otimização).
+
+**Status da solução** — o veredicto do solver:
+
+| Status       | Significado                                              |
+|--------------|----------------------------------------------------------|
+| `OPTIMAL`    | Achou a melhor solução possível                          |
+| `FEASIBLE`   | Achou uma solução válida (talvez não a melhor)           |
+| `INFEASIBLE` | PROVOU que não existe solução — alguma regra é violada   |
+| `MODEL_INVALID` | O modelo foi mal construído (erro de programação)     |
+
+**A regra de ouro dos inteiros** — o CP-SAT trabalha com aritmética inteira.
+Como expressar "no mínimo 10%"? Não escreva `soma >= 0.10 * total`; multiplique
+os dois lados por 100 e escreva `soma * 100 >= 10 * total`. Mesma matemática,
+zero números decimais. Você verá esse truque em todo o código a seguir.
+
+---
+
+## PARTE 2 — APLICANDO AO CASO REAL: AUDITORIA DE MATRIZES CURRICULARES
+
+Agora vamos percorrer os 5 passos no problema que motivou nossa ferramenta.
+
+### 2.1. PASSO 1 — Descrever o problema em português
+
+"Tenho 60 matrizes curriculares, cada uma composta por dezenas de disciplinas.
+Cada disciplina tem sua carga horária fragmentada em: teórica, prática de sala,
+prática de laboratório, EAD, ASM, estágio e extensão. Preciso verificar,
+matriz por matriz, se as regras do MEC e das DCNs são cumpridas:
+
+1. **Extensão** — no mínimo 10% da carga total (todos os cursos);
+2. **EAD** — no máximo 40% da carga (apenas cursos presenciais);
+3. **ASM** — no máximo 20% da carga (quando o curso possui ASM);
+4. **Estágio** — Medicina >= 35% | demais Saúde >= 20% | Engenharias >= 160h |
+   Licenciaturas >= 400h;
+5. **Prática pedagógica** — Licenciaturas >= 400h;
+6. **Prática indevida** — cursos cuja DCN não prevê formação prática (Economia,
+   Ciência da Computação, Sistemas de Informação) não deveriam ter CH prática;
+7. **Integridade** — a soma dos componentes deve fechar exatamente a CH total."
+
+Observe: cada regra é uma frase precisa, com número, comparador (mínimo/máximo)
+e escopo (a quem se aplica). Quando seu problema estiver descrito assim, 80% do
+trabalho está feito.
+
+### 2.2. Preparação do ambiente e ingestão dos dados
+
+```bash
+pip install ortools pandas openpyxl
+```
+
+Os dados vêm de um CSV separado por ponto e vírgula, uma linha por disciplina.
+Detalhe essencial: **convertemos as colunas de carga horária para inteiros**,
+porque o CP-SAT não aceita frações:
+
+```python
+import pandas as pd
+
+def carregar_dados(nome_arquivo='Dados_Exportacao_CSV.csv'):
+    df = pd.read_csv(nome_arquivo, sep=';', encoding='utf-8')
+
+    colunas_inteiras = ['Carga_Horaria', 'CH_Teorica', 'CH_Pratica_Sala',
+                        'CH_Pratica_Lab', 'CH_EAD', 'CH_ASM',
+                        'CH_Estagio', 'CH_Extensao']
+    for col in colunas_inteiras:
+        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+    return df
+```
+
+### 2.3. PASSO 2 — Variáveis (e o "truque da auditoria")
+
+Aqui está a decisão de modelagem mais interessante da ferramenta. Num problema
+de PLANEJAMENTO, as variáveis são livres — o solver escolhe os valores. Mas
+numa AUDITORIA, os valores já existem na planilha; queremos apenas saber se
+eles respeitam as regras.
+
+Como fazer o solver "conferir" em vez de "decidir"? **Travando cada variável no
+valor real da planilha** — mínimo = máximo:
+
+```python
+from ortools.sat.python import cp_model
+
+model = cp_model.CpModel()
+vars_ead, vars_extensao, vars_estagio = [], [], []
+
+for _, row in dados_matriz.iterrows():
+    id_disc = row['ID_Disciplina']
+    # mínimo = máximo = valor da planilha  ->  variável travada
+    var_ead = model.NewIntVar(row['CH_EAD'], row['CH_EAD'], f'ead_{id_disc}')
+    var_ext = model.NewIntVar(row['CH_Extensao'], row['CH_Extensao'], f'ext_{id_disc}')
+    var_est = model.NewIntVar(row['CH_Estagio'], row['CH_Estagio'], f'est_{id_disc}')
+
+    vars_ead.append(var_ead)
+    vars_extensao.append(var_ext)
+    vars_estagio.append(var_est)
+```
+
+Com todas as variáveis travadas, sobra ao solver uma única pergunta: "esses
+valores, juntos, satisfazem todas as restrições?" Se sim → `FEASIBLE` → matriz
+conforme. Se não → `INFEASIBLE` → matriz reprovada. O mesmo motor, dois usos.
+
+### 2.4. PASSO 3 — Restrições (o coração do modelo)
+
+Cada frase da descrição vira uma linha de código. Repare no truque da
+multiplicação por 100 para os percentuais, e nos `if` que definem o ESCOPO de
+cada regra (nem toda regra vale para todo curso):
+
+```python
+total_ch_alvo = int(dados_matriz['Carga_Horaria'].sum())
+
+# Regra 7: integridade — a soma dos componentes fecha a CH total
+model.Add(sum(vars_teorica) + sum(vars_pratica_sala) + sum(vars_pratica_lab)
+          + sum(vars_ead) + sum(vars_asm) + sum(vars_estagio)
+          + sum(vars_extensao) == total_ch_alvo)
+
+# Regra 1: extensão >= 10% (universal)
+model.Add(sum(vars_extensao) * 100 >= 10 * total_ch_alvo)
+
+# Regra 2: EAD <= 40% (só para modalidade Presencial)
+if modalidade == 'Presencial':
+    model.Add(sum(vars_ead) * 100 <= 40 * total_ch_alvo)
+
+# Regra 3: ASM <= 20% (só quando o curso tem ASM)
+if soma_asm > 0:
+    model.Add(sum(vars_asm) * 100 <= 20 * total_ch_alvo)
+
+# Regra 4: estágio conforme a área (percentual OU horas absolutas)
+if area == 'Saúde':
+    minimo = 35 if curso == 'Medicina' else 20
+    model.Add(sum(vars_estagio) * 100 >= minimo * total_ch_alvo)
+elif area == 'Engenharias':
+    model.Add(sum(vars_estagio) >= 160)          # horas absolutas
+elif area == 'Licenciaturas':
+    model.Add(sum(vars_estagio) >= 400)
+    model.Add(sum(vars_pratica_sala) >= 400)     # Regra 5: prática pedagógica
+
+# Regra 6: prática indevida — DCN do curso não prevê formação prática
+if curso in CURSOS_SEM_EXIGENCIA_PRATICA:        # {'Economia', 'Ciência da
+    model.Add(sum(vars_pratica_sala)             #  Computação', 'Sistemas de
+              + sum(vars_pratica_lab) == 0)      #  Informação'}
+```
+
+Três lições de modelagem escondidas aí:
+
+- **Percentual vs. valor absoluto** convivem no mesmo modelo sem problema — a
+  DCN de Saúde fala em %, a de Engenharias fala em horas; cada uma vira a
+  inequação correspondente.
+- **Regras condicionais** ficam FORA do modelo (no `if` do Python), porque
+  dependem de atributos fixos do curso (área, modalidade), não das variáveis.
+- **"Proibido" é uma restrição de igualdade a zero** — a regra 6 mostra como
+  expressar "isto não deveria existir aqui".
+
+### 2.5. PASSO 5 — Resolver e diagnosticar
+
+```python
+solver = cp_model.CpSolver()
+status = solver.Solve(model)
+
+if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    resultado = "VÁLIDA (Regras MEC Atendidas)"
+else:
+    resultado = "INVIÁVEL (Não Conforme)"
+```
+
+Um ponto de honestidade técnica: o `INFEASIBLE` do CP-SAT diz QUE a matriz
+viola alguma regra, mas não diz QUAL. Por isso a ferramenta complementa o
+solver com verificações explícitas que montam o **parecer** ("CH Extensão
+(3,6%) inferior ao mínimo de 10%"), gravado num relatório Excel com duas abas:
+Resumo Executivo (todas as matrizes, % de cada componente) e Não Conformidades
+(só as reprovadas, com o status de cada regra e o parecer técnico).
+
+O código completo — incluindo a geração do Excel formatado com `openpyxl` —
+está em `PLANEJADOR.PY`, na mesma pasta deste artigo.
+
+### 2.6. PASSO 4 — E a função objetivo? (de auditor a planejador)
+
+Nosso caso de auditoria não precisa de objetivo — só de um veredicto. Mas é
+aqui que o método mostra sua elasticidade: **destravando as variáveis e
+adicionando um objetivo, o MESMO modelo deixa de apenas apontar o erro e passa
+a propor a correção.**
+
+Imagine que uma matriz foi reprovada por falta de extensão. Pergunta natural:
+"qual o MENOR ajuste que torna essa matriz conforme?" Modelamos assim:
+
+```python
+# Variáveis LIVRES: o solver pode propor nova extensão para cada disciplina
+# (do valor atual até a CH total da disciplina)
+vars_ext_novo = []
+for _, row in dados_matriz.iterrows():
+    v = model.NewIntVar(0, row['Carga_Horaria'], f"ext_novo_{row['ID_Disciplina']}")
+    vars_ext_novo.append(v)
+
+# Restrição: com os novos valores, a regra dos 10% passa a ser cumprida
+model.Add(sum(vars_ext_novo) * 100 >= 10 * total_ch_alvo)
+
+# OBJETIVO: mexer o mínimo possível na matriz atual
+# (soma das diferenças entre o valor proposto e o valor atual)
+desvios = []
+for v, (_, row) in zip(vars_ext_novo, dados_matriz.iterrows()):
+    d = model.NewIntVar(0, row['Carga_Horaria'], f"desvio_{row['ID_Disciplina']}")
+    model.AddAbsEquality(d, v - int(row['CH_Extensao']))
+    desvios.append(d)
+
+model.Minimize(sum(desvios))
+```
+
+Rode o solver e ele devolve, disciplina por disciplina, a menor redistribuição
+de horas que torna a matriz conforme. Auditoria e planejamento são o mesmo
+esqueleto — muda apenas se as variáveis estão travadas ou livres, e se existe
+um objetivo. Essa é a mentalidade a levar para os seus problemas.
+
+---
+
+## PARTE 3 — A INTERFACE AMIGÁVEL COM TKINTER
+
+Um solver poderoso que só roda no terminal morre na mão do especialista. Para a
+ferramenta chegar a quem decide, ela precisa de uma tela. O **Tkinter** vem
+instalado com o próprio Python — sem dependências extras — e resolve bem.
+
+### 3.1. A anatomia da janela
+
+Nossa interface (código completo em `INTERFACE.py`) organiza a tela em blocos
+que contam a história do fluxo de trabalho, de cima para baixo:
+
+```
+┌──────────────────────────────────────────────────────┐
+│  ⚠ AVISO: DADOS FICTÍCIOS (banner destacado)         │
+├──────────────────────────────────────────────────────┤
+│  1. BASE DE DADOS                                    │
+│     [Baixar template] [Selecionar CSV] [Usar exemplo]│
+├──────────────────────────────────────────────────────┤
+│  2. EXECUÇÃO — PASSO A PASSO      [▶ Executar]       │
+│     ████████████░░░░░░░  (barra de progresso)        │
+│     (log ao vivo, colorido, matriz por matriz)       │
+├──────────────────────────────────────────────────────┤
+│  3. RESULTADO                                        │
+│     60 analisadas | 0 conformes | 60 não conformes   │
+│     [Abrir relatório Excel] [Salvar como...]         │
+└──────────────────────────────────────────────────────┘
+```
+
+Cada bloco é um `Frame`; dentro deles, `Label`, `Button`, `Progressbar` e um
+`Text` para o log. O esqueleto mínimo:
+
+```python
+import tkinter as tk
+from tkinter import ttk
+
+class Aplicacao(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("Auditoria Regulatória de Matrizes Curriculares")
+        self.geometry("1080x800")
+
+        # banner de aviso — impossível não ver
+        aviso = tk.Frame(self, bg="#FFF3CD")
+        tk.Label(aviso, text="⚠  ATENÇÃO — DADOS FICTÍCIOS",
+                 bg="#FFF3CD", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        aviso.pack(fill="x")
+
+        self.botao = ttk.Button(self, text="▶ Executar Auditoria",
+                                command=self.executar)
+        self.botao.pack()
+
+        self.progresso = ttk.Progressbar(self, maximum=100)
+        self.progresso.pack(fill="x")
+
+        self.log = tk.Text(self, bg="#0F1B2D", fg="#D6E1F0")
+        self.log.pack(fill="both", expand=True)
+
+Aplicacao().mainloop()
+```
+
+### 3.2. O desafio real: não congelar a janela
+
+Aqui está o conhecimento que separa uma interface amadora de uma profissional.
+O Tkinter tem UM laço de eventos: enquanto seu código roda, a janela **congela**
+(o Windows chega a exibir "não está respondendo"). Auditar 60 matrizes leva
+alguns segundos — tempo suficiente para o usuário achar que travou.
+
+A solução tem três peças, e é um padrão reutilizável em qualquer app:
+
+```
+[Thread de trabalho]  → roda o solver, produz mensagens
+        ↓ deposita na
+[Fila (queue.Queue)]  → canal seguro entre as threads
+        ↓ consumida pela
+[Janela (after)]      → a cada 100 ms, drena a fila e atualiza a tela
+```
+
+```python
+import threading, queue
+
+class Aplicacao(tk.Tk):
+    def __init__(self):
+        # ... widgets ...
+        self.fila = queue.Queue()
+        self.after(100, self._drenar_fila)   # agenda o "carteiro"
+
+    def executar(self):
+        self.botao.configure(state="disabled")
+        # o trabalho pesado vai para outra thread — a janela continua viva
+        threading.Thread(target=self._trabalho, daemon=True).start()
+
+    def _trabalho(self):
+        for i, matriz in enumerate(matrizes, 1):
+            resultado = validar(matriz)              # chama o CP-SAT
+            self.fila.put(("log", f"({i}) {matriz}: {resultado}"))
+            self.fila.put(("progresso", i * 100 // len(matrizes)))
+
+    def _drenar_fila(self):
+        try:
+            while True:
+                tipo, dado = self.fila.get_nowait()
+                if tipo == "log":
+                    self.log.insert("end", dado + "\n")
+                    self.log.see("end")              # rola para o fim
+                elif tipo == "progresso":
+                    self.progresso.configure(value=dado)
+        except queue.Empty:
+            pass
+        self.after(100, self._drenar_fila)           # reagenda para sempre
+```
+
+Regra de ouro: **a thread de trabalho NUNCA toca nos widgets** — ela só deposita
+mensagens na fila; quem atualiza a tela é sempre o laço principal.
+
+### 3.3. Mostrando o passo a passo sem reescrever o motor
+
+Nosso motor (`PLANEJADOR.PY`) narra tudo com `print()`. Em vez de reescrevê-lo
+para a interface, usamos um truque elegante: **redirecionar o `sys.stdout`**
+para um objeto que despeja cada linha na fila:
+
+```python
+class RedirecionadorTexto:
+    def __init__(self, fila):
+        self.fila = fila
+        self._buffer = ""
+    def write(self, texto):
+        self._buffer += texto
+        while "\n" in self._buffer:
+            linha, self._buffer = self._buffer.split("\n", 1)
+            self.fila.put(("log", linha))
+    def flush(self):
+        pass
+
+# na thread de trabalho:
+sys.stdout = RedirecionadorTexto(self.fila)
+try:
+    resultados = validar_todas_matrizes(df)   # os print() caem na fila!
+finally:
+    sys.stdout = sys.__stdout__               # sempre restaurar
+```
+
+Resultado: o usuário assiste, em tempo real, exatamente o que o auditor veria
+no terminal — etapa por etapa, matriz por matriz, com o veredicto colorido
+(verde para VÁLIDA, vermelho para INVIÁVEL) usando as *tags* do widget `Text`.
+
+### 3.4. Do script ao programa distribuível
+
+Última milha: quem vai testar a ferramenta não tem Python instalado. O
+**PyInstaller** empacota tudo (interpretador, bibliotecas, a base de exemplo)
+numa pasta autocontida:
+
+```bash
+pip install pyinstaller
+pyinstaller --onedir --windowed \
+    --add-data "Dados_Exportacao_CSV.csv;." \
+    --collect-all ortools \
+    INTERFACE.py
+```
+
+- `--onedir` gera uma pasta (abertura instantânea, ~6 s); `--onefile` geraria
+  um único .exe, porém com abertura lenta (~70 s, pois descompacta tudo a cada
+  execução);
+- `--windowed` suprime o console preto atrás da janela;
+- `--add-data` embute a base de exemplo; no código, o caminho é resolvido com
+  `sys._MEIPASS` quando o app está "congelado";
+- `--collect-all ortools` garante que as bibliotecas nativas do CP-SAT entrem
+  no pacote.
+
+Compacte a pasta gerada em `dist/` num .zip e envie: o destinatário extrai e
+dá dois cliques. (O script `build_exe.py` desta pasta automatiza tudo isso.)
+
+---
+
+## PARTE 4 — LEVE O MÉTODO PARA O SEU PROBLEMA
+
+### 4.1. O checklist de transferência
+
+Diante de qualquer problema novo, pergunte-se:
+
+```
+[ ] 1. Consigo descrever o problema em frases precisas, com números,
+       comparadores (mín/máx) e escopo (a quem cada regra se aplica)?
+[ ] 2. Quais são as variáveis? São inteiras (ou posso multiplicar por
+       100 para que sejam)? Qual o mínimo e o máximo de cada uma?
+       → Vou AUDITAR (variáveis travadas) ou PLANEJAR (variáveis livres)?
+[ ] 3. Cada regra virou uma linha model.Add(...)? As regras condicionais
+       estão nos if do Python?
+[ ] 4. Existe algo a otimizar (custo, desvio, tempo)? Se sim, Minimize/
+       Maximize. Se não, viabilidade pura já responde minha pergunta.
+[ ] 5. O que farei com cada status? (OPTIMAL/FEASIBLE = ...; INFEASIBLE
+       = ...) Como explico o resultado a quem não é técnico?
+[ ] 6. Quem vai usar precisa de interface? (Tkinter + thread + fila)
+       Precisa receber o programa pronto? (PyInstaller)
+```
+
+### 4.2. Ideias de aplicação imediata
+
+Com exatamente o esqueleto deste artigo, você resolve:
+
+- **Escala de trabalho** — variáveis: pessoa × turno (0/1); restrições: folgas,
+  carga máxima, cobertura mínima; objetivo: equilibrar horas entre pessoas.
+- **Distribuição de orçamento** — variáveis: verba por projeto; restrições:
+  teto por área, piso por prioridade; objetivo: maximizar retorno estimado.
+- **Grade de horários** — variáveis: disciplina × sala × horário; restrições:
+  sem conflitos de docente/sala; objetivo: minimizar janelas dos alunos.
+- **Corte de materiais** — variáveis: peças por chapa; restrições: dimensões;
+  objetivo: minimizar desperdício.
+- **Auditoria de qualquer norma** — o padrão deste artigo: trave os valores
+  reais, escreva as regras, e o INFEASIBLE aponta quem está fora.
+
+### 4.3. Conclusão
+
+O que este artigo quis demonstrar é que existe um **método**, não um talento:
+
+1. **Descreva** o problema com precisão — é o passo mais difícil e o mais
+   importante;
+2. **Declare** as variáveis com seus domínios (travadas para auditar, livres
+   para planejar);
+3. **Traduza** cada regra numa restrição — percentuais viram multiplicações
+   por 100, proibições viram igualdade a zero, condições ficam nos `if`;
+4. **Otimize** se houver o que otimizar — ou aceite que viabilidade já é
+   resposta;
+5. **Entregue** — uma interface simples (Tkinter + thread + fila) e um pacote
+   distribuível (PyInstaller) transformam o script num produto que qualquer
+   pessoa testa com dois cliques.
+
+O solver que o Google usa para problemas de escala industrial está a um
+`pip install` de distância. O que falta, na maioria das organizações, não é
+tecnologia — é alguém que saiba **descrever o problema**. Agora você sabe.
+
+---
+
+**Arquivos desta pasta:**
+- `PLANEJADOR.PY` — motor completo de auditoria (CP-SAT + relatório Excel)
+- `INTERFACE.py` — interface gráfica Tkinter (thread, fila, log ao vivo)
+- `build_exe.py` — gera o executável distribuível (PyInstaller)
+- `Dados_Exportacao_CSV.csv` — base FICTÍCIA de exemplo (60 matrizes)
+- `LEIA-ME.txt` — guia do usuário final

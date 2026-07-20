@@ -1,0 +1,12 @@
+# artefatos de build do PyInstaller (regenerados por build_exe.py)
+build/
+dist/
+*.spec
+
+# Python
+__pycache__/
+*.pyc
+
+# saída gerada pela ferramenta
+Relatorio_Auditoria_Matrizes.xlsx
+Auditoria_autoteste.txt

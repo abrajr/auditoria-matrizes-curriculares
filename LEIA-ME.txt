@@ -1,0 +1,143 @@
+===============================================================================
+  AUDITORIA REGULATÓRIA DE MATRIZES CURRICULARES
+  Ferramenta de validação de carga horária com CP-SAT (Google OR-Tools)
+===============================================================================
+
+*** ATENÇÃO: OS DADOS QUE ACOMPANHAM A FERRAMENTA SÃO FICTÍCIOS ***
+
+A base de exemplo (Dados_Exportacao_CSV.csv) é SINTÉTICA, criada apenas para
+demonstrar o funcionamento do código. Os cursos, matrizes e cargas horárias não
+correspondem a nenhuma instituição real, e os resultados obtidos com ela NÃO têm
+qualquer validade regulatória.
+
+
+-------------------------------------------------------------------------------
+1. COMO USAR (executável)
+-------------------------------------------------------------------------------
+
+1. Você recebeu a PASTA "Auditoria_Matrizes" (provavelmente em um arquivo .zip).
+   Extraia a pasta inteira em qualquer lugar (ex.: Área de Trabalho) e, dentro
+   dela, dê dois cliques em  Auditoria_Matrizes.exe
+
+   IMPORTANTE: mantenha o .exe dentro da pasta, junto dos demais arquivos — eles
+   fazem parte do programa. Não é necessário ter Python instalado.
+
+   Na primeira execução o Windows pode exibir um aviso do SmartScreen — clique em
+   "Mais informações" > "Executar assim mesmo" (isso ocorre porque o arquivo não
+   possui assinatura digital).
+
+2. A janela abre já com a base de exemplo carregada. Clique em
+   "Executar Auditoria" para ver a ferramenta funcionando.
+
+3. Para auditar dados reais:
+   a) Clique em "Baixar template CSV" e salve o arquivo;
+   b) Abra no Excel, mantenha o cabeçalho e substitua as linhas pelos dados
+      da sua instituição;
+   c) Salve como CSV separado por ponto e vírgula (;);
+   d) Volte à ferramenta, clique em "Selecionar arquivo CSV..." e execute.
+
+4. Ao final, o relatório é gravado em Documentos como
+   Relatorio_Auditoria_Matrizes.xlsx. Use "Abrir relatório Excel" para
+   visualizar ou "Salvar relatório como..." para escolher outro local.
+
+
+-------------------------------------------------------------------------------
+2. SE ALGO NÃO FUNCIONAR (autoteste)
+-------------------------------------------------------------------------------
+
+O programa tem um modo de diagnóstico que roda a auditoria completa sem abrir a
+janela e grava um relatório do que funcionou. Abra o Prompt de Comando na pasta
+onde está o executável e rode:
+
+    Auditoria_Matrizes.exe --autoteste
+
+O resultado é gravado em Documentos\Auditoria_autoteste.txt e mostra a versão do
+Python embutida, se a base de exemplo foi encontrada, se o solver CP-SAT rodou e
+se o Excel foi gerado. Envie esse arquivo se precisar de suporte.
+
+
+-------------------------------------------------------------------------------
+3. FORMATO DO ARQUIVO CSV
+-------------------------------------------------------------------------------
+
+Separador: ponto e vírgula (;)      Uma linha por disciplina.
+
+Colunas obrigatórias:
+  ID_Matriz .......... identificador da matriz (ex.: MAT001)
+  Area ............... Saúde | Engenharias | Licenciaturas | Negócios | Tecnologia
+  Curso .............. nome do curso (ex.: Enfermagem)
+  Modalidade ......... Presencial | Semipresencial | 100% EAD
+  ID_Disciplina ...... identificador da disciplina
+  Nome_Disciplina .... nome da disciplina
+  Carga_Horaria ...... CH total da disciplina (horas)
+
+Colunas de composição da carga horária (a soma deve fechar Carga_Horaria):
+  CH_Teorica, CH_Pratica_Sala, CH_Pratica_Lab, CH_EAD, CH_ASM,
+  CH_Estagio, CH_Extensao
+
+Colunas informativas (não usadas nos cálculos): Sinergia, Eh_EAD
+
+
+-------------------------------------------------------------------------------
+4. REGRAS VERIFICADAS
+-------------------------------------------------------------------------------
+
+  Extensão ............ mínimo de 10% da CH total (todos os cursos)
+  EAD ................. máximo de 40% da CH (somente cursos Presenciais)
+  ASM ................. máximo de 20% da CH (quando o curso possui ASM)
+  Estágio — Saúde ..... Medicina >= 35% | demais cursos da Saúde >= 20%
+  Estágio — Engenharias  mínimo de 160 horas
+  Estágio — Licenciat.   mínimo de 400 horas
+  Prática — Licenciat.   Prática Pedagógica mínima de 400 horas
+  Prática indevida .... a CH de prática deve ser zero em cursos cuja DCN não
+                        prevê formação prática (Economia, Ciência da Computação
+                        e Sistemas de Informação)
+  Integridade ......... a soma dos componentes deve fechar 100% da CH total
+
+Observação sobre a regra de prática indevida: as DCNs estabelecem PISO de
+formação prática, não teto. Uma matriz que aloca prática além do mínimo não
+infringe norma — o apontamento indica carga horária provavelmente desnecessária,
+que costuma ser cara (turmas menores e laboratório). Trate esse item como
+oportunidade de revisão, não como irregularidade jurídica.
+
+As exigências por curso foram levantadas nas resoluções vigentes (jul/2026):
+  Enfermagem ........... Res. CNE/CES 1/2026
+  Engenharias .......... Res. CNE/CES 2/2019
+  Licenciaturas ........ Res. CNE/CP 2/2019
+  Administração ........ Res. CNE/CES 5/2021, art. 4º, V
+  Ciências Contábeis ... Res. CNE/CES 1/2024, art. 5º
+  Economia ............. Res. CNE/CES 4/2007 (não exige prática)
+  Computação ........... Res. CNE/CES 5/2016 (não exige prática)
+
+Para ajustar limites ou a lista de cursos, edite as constantes no início de
+PLANEJADOR.py (LIMITE_*, MIN_*, CURSOS_SEM_EXIGENCIA_PRATICA).
+
+
+-------------------------------------------------------------------------------
+5. RELATÓRIO GERADO
+-------------------------------------------------------------------------------
+
+Aba "Resumo Executivo" ...... indicadores gerais e a distribuição percentual de
+                              todos os componentes de cada matriz
+Aba "Não Conformidades" ..... apenas as matrizes reprovadas, com o status de
+                              cada regra e o parecer técnico detalhado
+
+
+-------------------------------------------------------------------------------
+6. EXECUTAR A PARTIR DO CÓDIGO-FONTE
+-------------------------------------------------------------------------------
+
+Requisitos: Python 3.9 ou superior
+
+    pip install pandas openpyxl ortools
+    python INTERFACE.py          (interface gráfica)
+    python PLANEJADOR.PY         (execução direta no terminal)
+
+Para gerar o executável novamente:
+
+    pip install pyinstaller
+    python build_exe.py          (saída em dist/Auditoria_Matrizes/)
+
+Para distribuir, compacte a pasta dist/Auditoria_Matrizes inteira em .zip.
+
+===============================================================================
