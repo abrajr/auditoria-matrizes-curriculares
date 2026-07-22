@@ -1,7 +1,8 @@
 name: Gerar aplicativos (Windows e macOS)
 
 # Compila o aplicativo nos dois sistemas, em máquinas reais da nuvem do GitHub.
-# Dispare manualmente na aba "Actions" do repositório, ou empurrando uma tag vX.Y.
+# Dispare manualmente na aba "Actions" (gera artefatos de build) ou empurre uma
+# tag vX.Y (gera E publica os pacotes numa Release).
 on:
   workflow_dispatch:
   push:
@@ -55,8 +56,32 @@ jobs:
           name: ${{ matrix.nome_pacote }}
           path: ${{ matrix.nome_pacote }}.zip
 
-      - name: Anexar à Release (somente quando dispara por tag)
-        if: startsWith(github.ref, 'refs/tags/')
+  # Só roda quando o gatilho é uma tag: junta os dois pacotes numa única Release.
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar os pacotes gerados
+        uses: actions/download-artifact@v4
+        with:
+          path: pacotes
+
+      - name: Criar a Release e anexar os pacotes
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ matrix.nome_pacote }}.zip
+          files: pacotes/**/*.zip
+          body: |
+            ## Aplicativo para Windows e macOS — não requer Python
+
+            Baixe o pacote do seu sistema, extraia a pasta inteira e execute o app.
+
+            - **Windows:** `Auditoria_Matrizes-Windows.zip` → `Auditoria_Matrizes.exe`
+              Primeira execução: aviso do SmartScreen → **Mais informações → Executar assim mesmo**.
+            - **macOS:** `Auditoria_Matrizes-macOS.zip` → `Auditoria_Matrizes.app`
+              Primeira execução: **botão direito no app → Abrir → Abrir** (Gatekeeper). Veja `COMO-ABRIR-NO-MAC.txt`.
+
+            > ⚠️ **Os dados que acompanham a ferramenta são FICTÍCIOS**, apenas para demonstração.
+            > Para uso real, baixe o template CSV pelo próprio aplicativo e preencha com os dados da sua instituição.
+
+            Instruções completas no `LEIA-ME.txt` dentro de cada pacote. Em caso de problema, rode o app com `--autoteste` (instruções no LEIA-ME) e envie o arquivo `Documentos/Auditoria_autoteste.txt` gerado.
