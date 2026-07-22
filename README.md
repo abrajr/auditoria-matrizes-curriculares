@@ -15,13 +15,19 @@ executivo em Excel.
 
 ## 📥 Download para teste (sem instalar nada)
 
-Baixe o **`Auditoria_Matrizes.zip`** na página de
-**[Releases](../../releases/latest)**, extraia a pasta inteira e execute
-`Auditoria_Matrizes.exe` (Windows, não requer Python).
+Baixe o pacote do seu sistema na página de **[Releases](../../releases/latest)**,
+extraia a pasta inteira e execute o aplicativo. Não requer Python.
 
+**Windows** — `Auditoria_Matrizes-Windows.zip` → execute `Auditoria_Matrizes.exe`
 > Na primeira execução o Windows pode exibir o aviso do SmartScreen — clique em
-> **"Mais informações" → "Executar assim mesmo"** (o executável não possui
-> assinatura digital). Instruções completas no `LEIA-ME.txt` dentro do pacote.
+> **"Mais informações" → "Executar assim mesmo"** (o app não tem assinatura digital).
+
+**macOS** — `Auditoria_Matrizes-macOS.zip` → execute `Auditoria_Matrizes.app`
+> Como o app não é assinado pela Apple, o macOS bloqueia a primeira abertura:
+> **clique com o botão direito no app → "Abrir" → "Abrir"**. Detalhes no
+> `COMO-ABRIR-NO-MAC.txt` incluído no pacote.
+
+Instruções gerais de uso no `LEIA-ME.txt` dentro de cada pacote.
 
 ## 🖥️ O que a ferramenta faz
 
@@ -55,12 +61,19 @@ python INTERFACE.py      # interface gráfica
 python PLANEJADOR.PY     # execução direta no terminal (CLI)
 ```
 
-Para gerar o executável distribuível:
+Para gerar o aplicativo distribuível (rode NO sistema de destino — o PyInstaller
+não faz compilação cruzada):
 
 ```bash
 pip install pyinstaller
-python build_exe.py      # saída em dist/Auditoria_Matrizes/
+python build_exe.py      # Windows -> dist/Auditoria_Matrizes/
+                         # macOS   -> dist/Auditoria_Matrizes-mac/ (com o .app)
 ```
+
+> **Não tem um Mac?** O repositório inclui um fluxo de **GitHub Actions**
+> (`.github/workflows/build.yml`) que compila os pacotes de Windows e macOS em
+> máquinas reais da nuvem. Empurre uma tag `vX.Y` (ou dispare manualmente na aba
+> **Actions**) e baixe os pacotes prontos.
 
 ## 📁 Estrutura do repositório
 

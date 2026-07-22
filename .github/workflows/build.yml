@@ -1,0 +1,62 @@
+name: Gerar aplicativos (Windows e macOS)
+
+# Compila o aplicativo nos dois sistemas, em máquinas reais da nuvem do GitHub.
+# Dispare manualmente na aba "Actions" do repositório, ou empurrando uma tag vX.Y.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # necessário para anexar os pacotes a uma Release
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            nome_pacote: Auditoria_Matrizes-Windows
+            pasta_dist: dist/Auditoria_Matrizes
+          - os: macos-latest
+            nome_pacote: Auditoria_Matrizes-macOS
+            pasta_dist: dist/Auditoria_Matrizes-mac
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller
+
+      - name: Gerar o aplicativo
+        run: python build_exe.py
+
+      - name: Compactar (Windows)
+        if: runner.os == 'Windows'
+        run: Compress-Archive -Path "${{ matrix.pasta_dist }}" -DestinationPath "${{ matrix.nome_pacote }}.zip"
+
+      - name: Compactar (macOS)
+        if: runner.os == 'macOS'
+        run: ditto -c -k --keepParent "${{ matrix.pasta_dist }}" "${{ matrix.nome_pacote }}.zip"
+
+      - name: Publicar como artefato de build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.nome_pacote }}
+          path: ${{ matrix.nome_pacote }}.zip
+
+      - name: Anexar à Release (somente quando dispara por tag)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.nome_pacote }}.zip

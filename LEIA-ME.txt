@@ -12,19 +12,25 @@ qualquer validade regulatória.
 
 
 -------------------------------------------------------------------------------
-1. COMO USAR (executável)
+1. COMO USAR (aplicativo)
 -------------------------------------------------------------------------------
 
-1. Você recebeu a PASTA "Auditoria_Matrizes" (provavelmente em um arquivo .zip).
-   Extraia a pasta inteira em qualquer lugar (ex.: Área de Trabalho) e, dentro
-   dela, dê dois cliques em  Auditoria_Matrizes.exe
+Você recebeu um arquivo .zip. Extraia-o em qualquer lugar (ex.: Área de Trabalho).
+Não é necessário ter Python instalado.
 
-   IMPORTANTE: mantenha o .exe dentro da pasta, junto dos demais arquivos — eles
-   fazem parte do programa. Não é necessário ter Python instalado.
+  >> NO WINDOWS (pacote Auditoria_Matrizes-Windows):
+     Abra a pasta extraída e dê dois cliques em  Auditoria_Matrizes.exe
+     Mantenha o .exe dentro da pasta, junto dos demais arquivos — eles fazem
+     parte do programa.
+     Na primeira execução o Windows pode exibir um aviso do SmartScreen — clique
+     em "Mais informações" > "Executar assim mesmo" (o app não tem assinatura
+     digital).
 
-   Na primeira execução o Windows pode exibir um aviso do SmartScreen — clique em
-   "Mais informações" > "Executar assim mesmo" (isso ocorre porque o arquivo não
-   possui assinatura digital).
+  >> NO macOS (pacote Auditoria_Matrizes-macOS):
+     Dê dois cliques em  Auditoria_Matrizes.app
+     Como o app não é assinado pela Apple, na PRIMEIRA vez o macOS bloqueia:
+     clique com o BOTÃO DIREITO (ou Control+clique) no app > "Abrir" > "Abrir".
+     Depois disso, o duplo clique normal funciona. Veja COMO-ABRIR-NO-MAC.txt.
 
 2. A janela abre já com a base de exemplo carregada. Clique em
    "Executar Auditoria" para ver a ferramenta funcionando.
@@ -46,14 +52,17 @@ qualquer validade regulatória.
 -------------------------------------------------------------------------------
 
 O programa tem um modo de diagnóstico que roda a auditoria completa sem abrir a
-janela e grava um relatório do que funcionou. Abra o Prompt de Comando na pasta
-onde está o executável e rode:
+janela e grava um relatório do que funcionou.
 
-    Auditoria_Matrizes.exe --autoteste
+  >> No Windows: abra o Prompt de Comando na pasta do app e rode:
+       Auditoria_Matrizes.exe --autoteste
 
-O resultado é gravado em Documentos\Auditoria_autoteste.txt e mostra a versão do
-Python embutida, se a base de exemplo foi encontrada, se o solver CP-SAT rodou e
-se o Excel foi gerado. Envie esse arquivo se precisar de suporte.
+  >> No macOS: abra o Terminal e rode (ajuste o caminho do app):
+       ./Auditoria_Matrizes.app/Contents/MacOS/Auditoria_Matrizes --autoteste
+
+O resultado é gravado na pasta Documentos (Auditoria_autoteste.txt) e mostra a
+versão do Python embutida, se a base de exemplo foi encontrada, se o solver
+CP-SAT rodou e se o Excel foi gerado. Envie esse arquivo se precisar de suporte.
 
 
 -------------------------------------------------------------------------------
